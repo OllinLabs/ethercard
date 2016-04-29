@@ -281,7 +281,7 @@ static uint32_t getBigEndianLong(byte offs) { //get the sequence number of packe
     return (((unsigned long)gPB[offs]*256+gPB[offs+1])*256+gPB[offs+2])*256+gPB[offs+3];
 } //thanks to mstuetz for the missing (unsigned long)
 
-static void setSequenceNumber(uint32_t seq) { 
+static void setSequenceNumber(uint32_t seq) {
     gPB[TCP_SEQ_H_P]   = (seq & 0xff000000 ) >> 24;
     gPB[TCP_SEQ_H_P+1] = (seq & 0xff0000 ) >> 16;
     gPB[TCP_SEQ_H_P+2] = (seq & 0xff00 ) >> 8;
@@ -529,6 +529,52 @@ uint8_t EtherCard::clientTcpReq (uint8_t (*result_cb)(uint8_t,uint8_t,uint16_t,u
     return tcp_fd;
 }
 
+uint8_t EtherCard::clientTcpReqReuseSession () {
+    uint8_t mask[4];
+    mask[0] = random(0, 256);
+    mask[1] = random(0, 256);
+    mask[2] = random(0, 256);
+    mask[3] = random(0, 256);
+
+    String str = "Hello server ";
+    str += millis();
+    int size = str.length() + 1;
+    char cstr[size];
+    str.toCharArray(cstr, size);
+
+    Stash stash;
+    byte sd = stash.create();
+    // stash.put(0x00); // Fin (One message)
+    // stash.put(0x00); // Rsv 1
+    // stash.put(0x00); // Rsv 2
+    // stash.put(0x00); // Rsv 3
+    // stash.put(0x01); // Opcode (String)
+    stash.put(0x81); // 1000 0001 = [Fin RSV] [Opcode = text]
+    stash.put((uint8_t) size | 0x80);
+    stash.put(mask[0]);
+    stash.put(mask[1]);
+    stash.put(mask[2]);
+    stash.put(mask[3]);
+    for (int i=0; i<size; ++i) {
+        stash.put(str[i] ^ mask[i % 4]);
+    }
+    stash.save();
+    Stash::prepare(PSTR("$H"), sd);
+
+    uint16_t len = Stash::length();
+    Stash::extract(0, len, EtherCard::tcpOffset());
+    Stash::cleanup();
+    EtherCard::tcpOffset()[len] = 0;
+
+    Serial.print("REQUEST: ");
+    Serial.println(len);
+    // Serial.println((char*) EtherCard::tcpOffset());
+
+    gPB[TCP_FLAGS_P] = TCP_FLAGS_ACK_V|TCP_FLAGS_PUSH_V;
+    make_tcp_ack_with_data_noflags(len); // send data
+    return tcp_fd;
+}
+
 static uint16_t www_client_internal_datafill_cb(uint8_t fd) {
     BufferFiller bfill = EtherCard::tcpOffset();
     if (fd==www_fd) {
@@ -597,11 +643,11 @@ static uint16_t tcp_datafill_cb(uint8_t fd) {
     Stash::extract(0, len, EtherCard::tcpOffset());
     Stash::cleanup();
     EtherCard::tcpOffset()[len] = 0;
-#if SERIAL
+// #if SERIAL
     Serial.print("REQUEST: ");
     Serial.println(len);
     Serial.println((char*) EtherCard::tcpOffset());
-#endif
+// #endif
     result_fd = 123; // bogus value
     return len;
 }
@@ -653,7 +699,7 @@ uint16_t EtherCard::accept(const uint16_t port, uint16_t plen) {
             {   //Got some data
                 pos = TCP_DATA_START; // TCP_DATA_START is a formula
                 //!@todo no idea what this check pos<=plen-8 does; changed this to pos<=plen as otw. perfectly valid tcp packets are ignored; still if anybody has any idea please leave a comment
-                if (pos <= plen) 
+                if (pos <= plen)
                     return pos;
             }
             else if (gPB[TCP_FLAGS_P] & TCP_FLAGS_FIN_V)
@@ -684,6 +730,7 @@ uint16_t EtherCard::packetLoop (uint16_t plen) {
 #if ETHERCARD_TCPCLIENT
         //Initiate TCP/IP session if pending
         if (tcp_client_state==1 && (waitgwmac & WGW_HAVE_GW_MAC)) { // send a syn
+            Serial.println("Starting TCPIP session");
             tcp_client_state = 2;
             tcpclient_src_port_l++; // allocate a new port
             client_syn(((tcp_fd<<5) | (0x1f & tcpclient_src_port_l)),tcp_client_port_h,tcp_client_port_l);
@@ -745,8 +792,11 @@ uint16_t EtherCard::packetLoop (uint16_t plen) {
     }
 #endif
 
-    if (plen<54 || gPB[IP_PROTO_P]!=IP_PROTO_TCP_V )
+    if (plen<54 || gPB[IP_PROTO_P]!=IP_PROTO_TCP_V ) {
+        Serial.println("Less tan 54 bytes");
         return 0; //from here on we are only interested in TCP-packets; these are longer than 54 bytes
+    }
+
 
 #if ETHERCARD_TCPCLIENT
     if (gPB[TCP_DST_PORT_H_P]==TCPCLIENT_SRC_PORT_H)
@@ -786,6 +836,8 @@ uint16_t EtherCard::packetLoop (uint16_t plen) {
         }
         if (tcp_client_state==3 && len>0)
         {   //TCP connection established so read data
+            Serial.print("Handling tcp data, w len: ");
+            Serial.println(plen);
             if (client_tcp_result_cb) {
                 uint16_t tcpstart = TCP_DATA_START; // TCP_DATA_START is a formula
                 if (tcpstart>plen-8)
@@ -797,6 +849,7 @@ uint16_t EtherCard::packetLoop (uint16_t plen) {
 
                 if(persist_tcp_connection)
                 {   //Keep connection alive by sending ACK
+                    Serial.println("Keeping connection alive");
                     make_tcp_ack_from_any(len,TCP_FLAGS_PUSH_V);
                 }
                 else
@@ -822,7 +875,7 @@ uint16_t EtherCard::packetLoop (uint16_t plen) {
         return 0;
     }
 #endif
-
+    Serial.println("got to the end");
 #if ETHERCARD_TCPSERVER
     //If we are here then this is a TCP/IP packet targetted at us and not related to our client connection so accept
     return accept(hisport, plen);

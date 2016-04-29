@@ -76,7 +76,7 @@ uint8_t Stash::freeCount () {
     return count;
 }
 
-// create a new stash; make it the active stash; return the first block as a handle 
+// create a new stash; make it the active stash; return the first block as a handle
 uint8_t Stash::create () {
     uint8_t blk = allocBlock();
     load(WRITEBUF, blk);
@@ -84,7 +84,7 @@ uint8_t Stash::create () {
     bufs[WRITEBUF].head.first = bufs[0].head.last = blk;
     bufs[WRITEBUF].tail = sizeof (StashHeader);
     bufs[WRITEBUF].next = 0;
-    return open(blk); // you are now the active stash 
+    return open(blk); // you are now the active stash
 }
 
 // the stashheader part only contains reasonable data if we are the first block
@@ -139,7 +139,7 @@ char Stash::get () {
     return b;
 }
 
-// fetchbyte(last, 62) is tail, i.e., number of characters in last block 
+// fetchbyte(last, 62) is tail, i.e., number of characters in last block
 uint16_t Stash::size () {
     return 63 * count + fetchByte(last, 62) - sizeof (StashHeader);
 }
@@ -152,8 +152,8 @@ static char* wtoa (uint16_t value, char* ptr) {
     return ptr;
 }
 
-// write information about the fmt string and the arguments into special page/block 0    
-// block 0 is initially marked as allocated and never returned by allocateBlock 
+// write information about the fmt string and the arguments into special page/block 0
+// block 0 is initially marked as allocated and never returned by allocateBlock
 void Stash::prepare (PGM_P fmt, ...) {
     Stash::load(WRITEBUF, 0);
     uint16_t* segs = Stash::bufs[WRITEBUF].words;
@@ -396,7 +396,7 @@ uint8_t EtherCard::gwip[4];   // gateway
 uint8_t EtherCard::dhcpip[4]; // dhcp server
 uint8_t EtherCard::dnsip[4];  // dns server
 uint8_t EtherCard::hisip[4];  // ip address of remote host
-uint16_t EtherCard::hisport = 80; // tcp port to browse to
+uint16_t EtherCard::hisport = 8080; // tcp port to browse to
 bool EtherCard::using_dhcp = false;
 bool EtherCard::persist_tcp_connection = false;
 uint16_t EtherCard::delaycnt = 0; //request gateway ARP lookup

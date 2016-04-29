@@ -18,7 +18,7 @@
 //   SI  - Pin 11
 //   CS  - Pin  8
 //
-/** @file */ 
+/** @file */
 
 #ifndef EtherCard_h
 #define EtherCard_h
@@ -54,20 +54,20 @@
 */
 #define ETHERCARD_TCPCLIENT 1
 
-/** Enable TCP server functionality. 
+/** Enable TCP server functionality.
 *   Setting this to zero means that the program will not accept TCP client
 *   requests. Saves 2 bytes SRAM and 250 bytes flash.
 */
 #define ETHERCARD_TCPSERVER 1
 
-/** Enable UDP server functionality. 
+/** Enable UDP server functionality.
 *   If zero UDP server is disabled. It is
 *   still possible to register callbacks but these will never be called. Saves
 *   about 40 bytes SRAM and 200 bytes flash. If building with -flto this does not
 *   seem to save anything; maybe the linker is then smart enough to optimize the
 *   call away.
 */
-#define ETHERCARD_UDPSERVER 1
+#define ETHERCARD_UDPSERVER 0
 
 /** Enable automatic reply to pings.
 *   Setting to zero means that the program will not automatically answer to
@@ -116,10 +116,10 @@ class Stash : public /*Stream*/ Print, private StashHeader {
             uint8_t bytes[64];
             uint16_t words[32];
             struct {
-                StashHeader head; // StashHeader is only stored in first block 
+                StashHeader head; // StashHeader is only stored in first block
                 uint8_t filler[59];
-                uint8_t tail;     // only meaningful if bnum==last; number of bytes in last block 
-                uint8_t next;     // pointer to next block 
+                uint8_t tail;     // only meaningful if bnum==last; number of bytes in last block
+                uint8_t next;     // pointer to next block
             };
         };
         uint8_t bnum;
@@ -374,6 +374,15 @@ public:
     */
     static uint8_t clientTcpReq (uint8_t (*result_cb)(uint8_t,uint8_t,uint16_t,uint16_t),
                                  uint16_t (*datafill_cb)(uint8_t),uint16_t port);
+
+    /**   @brief  Prepare a TCP request
+    *     @param  result_cb Pointer to callback function that handles TCP result
+    *     @param  datafill_cb Pointer to callback function that handles TCP data payload
+    *     @param  port Remote TCP/IP port to connect to
+    *     @return <i>unit8_t</i> ID of TCP/IP session (0-7)
+    *     @note   Return value provides id of the request to allow up to 7 concurrent requests
+    */
+    static uint8_t clientTcpReqReuseSession ();
 
     /**   @brief  Prepare HTTP request
     *     @param  urlbuf Pointer to c-string URL folder
@@ -634,7 +643,7 @@ public:
 
     /**   @brief  Return the payload length of the current Tcp package
     */
-    static uint16_t getTcpPayloadLength(); 
+    static uint16_t getTcpPayloadLength();
 };
 
 extern EtherCard ether; //!< Global presentation of EtherCard class
